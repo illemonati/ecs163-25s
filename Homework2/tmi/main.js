@@ -4,14 +4,21 @@ const height = window.innerHeight;
 
 // chart positions based on the template
 
-let depressionChartLeft = 0,
-    depressionChartTop = 20;
-
-let depressionChartMargin = { top: 40, right: 50, bottom: 100, left: 80 },
-    depressionChartWidth =
+let depressionChartMargin = { top: 40, right: 200, bottom: 100, left: 200 },
+    depressionChartWidth = Math.min(
         width - depressionChartMargin.left - depressionChartMargin.right,
+        1000
+    ),
     depressionChartHeight =
         350 - depressionChartMargin.top - depressionChartMargin.bottom;
+
+let depressionChartLeft =
+        (width -
+            depressionChartWidth -
+            depressionChartMargin.left -
+            depressionChartMargin.right) /
+        2,
+    depressionChartTop = 20;
 
 // Since the course names are not clean
 // ie. engi, engine, engineer, engineering all refer to the same catagory
@@ -108,6 +115,8 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
 
         d.hasAnxiety = d["Do you have Anxiety?"] === "Yes";
         d.hasPanicAttack = d["Do you have Panic attack?"] === "Yes";
+
+        d.cgpa = d["What is your CGPA?"];
     }
 
     console.log("cleaned", cleanedData);
@@ -124,6 +133,7 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
         gender: d.gender,
     }));
 
+    // Get stats for each catagory
     const processedDepressionData = {};
     for (let d of filteredDepressionData) {
         // Make the course if not exists
@@ -173,6 +183,7 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
     // Make the plot
     const svg = d3.select("svg");
 
+    // create the chart element
     const depressionBarChart = svg
         .append("g")
         .attr(
@@ -189,7 +200,9 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
         )
         .attr(
             "transform",
-            `translate(${depressionChartMargin.left}, ${depressionChartMargin.top})`
+            `translate(${depressionChartLeft + depressionChartMargin.left}, ${
+                depressionChartMargin.top
+            })`
         );
 
     // X label
@@ -274,13 +287,14 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
         .attr("text-anchor", "middle")
         .style("font-size", "24px")
         .style("font-weight", "bold")
-        .text("Depression Rate by Course");
+        .text("Student Depression Rate by Course");
 
     // Make the legend
     // I also used chatgpt to help me understand how to make a gradiant
     const depressionLegendWidth = 100;
     const depressionLegendHeight = 20;
 
+    // create the legend element
     const depressionLegend = depressionBarChart
         .append("g")
         .attr(
@@ -297,9 +311,11 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
         .attr("x1", "0%")
         .attr("x2", "100%");
 
+    // make the graxdient itself
     gradient.append("stop").attr("offset", "0%").attr("stop-color", "green");
     gradient.append("stop").attr("offset", "100%").attr("stop-color", "red");
 
+    // make the legend box that contains the gradient
     depressionLegend
         .append("rect")
         .attr("width", depressionLegendWidth)
@@ -329,6 +345,7 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
 
     // Represents connections between male, female, depression, anxiety, panic attack
 
+    // set up positions
     let chordChartLeft = 0,
         chordChartTop = height / 2;
 
@@ -403,10 +420,12 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
 
     console.log("matrix:", matrix);
 
+    // use the built in d3 chord function to make the chord from the matrix
     const chordInfo = d3.chord().padAngle(0.05).sortSubgroups(d3.descending)(
         matrix
     );
 
+    // just use a generic color scheme
     const chordColors = d3.schemeTableau10;
 
     // Calculate responsive radius based on chart size
@@ -460,7 +479,23 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
         .attr("text-anchor", "middle")
         .style("font-size", "18px")
         .style("font-weight", "bold")
-        .text("Mental Health & Gender");
+        .text("Student Mental Health & Gender");
+
+    // Comment on the chart
+    chordChart
+        .append("text")
+        .attr("x", chordChartWidth / 2)
+        .attr("y", chordChartHeight - 50)
+        .attr("text-anchor", "middle")
+        .style("font-size", "14px")
+        .append("tspan")
+        .attr("x", chordChartWidth / 2)
+        .attr("dy", 0)
+        .text("Shows how different mental health issues connect to each other,")
+        .append("tspan")
+        .attr("x", chordChartWidth / 2)
+        .attr("dy", "1.2rem")
+        .text("as well as the gender connection");
 
     // Legend
     const legendWidth = 150;
@@ -476,18 +511,21 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
         "Has Panic Attack",
     ];
 
+    // seperate out each entry so it contains the rect for color and text for name
     const chordLegendEntries = chordLegend
         .selectAll("g")
         .data(chordLegendNames)
         .join("g")
         .attr("transform", (d, i) => `translate(0, ${i * 22})`);
 
+    // make the rect for color
     chordLegendEntries
         .append("rect")
         .attr("width", 20)
         .attr("height", 20)
         .style("fill", (d, i) => chordColors[i]);
 
+    // make the text for the name
     chordLegendEntries
         .append("text")
         .attr("x", 30)
@@ -495,152 +533,203 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
         .text((d) => d)
         .style("font-size", 16);
 
-    // rawData.forEach(function(d){
-    //     d.AB = Number(d.AB);
-    //     d.H = Number(d.H);
-    //     d.salary = Number(d.salary);
-    //     d.SO = Number(d.SO);
-    // });
+    // Visualization 3 Heat map of Years of Study and CGPA, with the heat being rate of depression
+    // learned code from https://d3-graph-gallery.com/heatmap.html and also chatgpt for this one
 
-    // const filteredData = rawData.filter(d=>d.AB>abFilter);
-    // const processedData = filteredData.map(d=>{
-    //                       return {
-    //                           "H_AB":d.H/d.AB,
-    //                           "SO_AB":d.SO/d.AB,
-    //                           "teamID":d.teamID,
-    //                       };
-    // });
-    // console.log("processedData", processedData);
+    // set up positions
+    let heatmapChartLeft = width / 2,
+        heatmapChartTop = height / 2;
 
-    // //plot 1: Scatter Plot
-    // const svg = d3.select("svg");
+    let heatmapChartMargin = { top: 50, right: 50, bottom: 80, left: 80 },
+        heatmapChartWidth =
+            width / 2 - heatmapChartMargin.left - heatmapChartMargin.right,
+        heatmapChartHeight =
+            height / 2 - heatmapChartMargin.top - heatmapChartMargin.bottom;
 
-    // const g1 = svg.append("g")
-    //             .attr("width", scatterWidth + scatterMargin.left + scatterMargin.right)
-    //             .attr("height", scatterHeight + scatterMargin.top + scatterMargin.bottom)
-    //             .attr("transform", `translate(${scatterMargin.left}, ${scatterMargin.top})`);
+    // these catagories are from the data
+    const years = [1, 2, 3, 4];
+    const cgpas = [
+        "3.50 - 4.00",
+        "3.00 - 3.49",
+        "2.50 - 2.99",
+        "2.00 - 2.49",
+        "0.00 - 1.99",
+    ];
 
-    // // X label
-    // g1.append("text")
-    // .attr("x", scatterWidth / 2)
-    // .attr("y", scatterHeight + 50)
-    // .attr("font-size", "20px")
-    // .attr("text-anchor", "middle")
-    // .text("H/AB");
+    // Process the data so we can get depression rate for each combo of year and cgpa
+    const processedHeatmapData = [];
 
-    // // Y label
-    // g1.append("text")
-    // .attr("x", -(scatterHeight / 2))
-    // .attr("y", -40)
-    // .attr("font-size", "20px")
-    // .attr("text-anchor", "middle")
-    // .attr("transform", "rotate(-90)")
-    // .text("SO/AB");
+    // For each combination of year and CGPA
+    for (let year of years) {
+        for (let cgpa of cgpas) {
+            // get depressed, then get total, then divide for rate
 
-    // // X ticks
-    // const x1 = d3.scaleLinear()
-    // .domain([0, d3.max(processedData, d => d.H_AB)])
-    // .range([0, scatterWidth]);
+            const depressedStudents = rawData.filter(
+                (d) => d.year === year && d.cgpa === cgpa && d.hasDepression
+            ).length;
 
-    // const xAxisCall = d3.axisBottom(x1)
-    //                     .ticks(7);
-    // g1.append("g")
-    // .attr("transform", `translate(0, ${scatterHeight})`)
-    // .call(xAxisCall)
-    // .selectAll("text")
-    //     .attr("y", "10")
-    //     .attr("x", "-5")
-    //     .attr("text-anchor", "end")
-    //     .attr("transform", "rotate(-40)");
+            const totalStudents = rawData.filter(
+                (d) => d.year === year && d.cgpa === cgpa
+            ).length;
 
-    // // Y ticks
-    // const y1 = d3.scaleLinear()
-    // .domain([0, d3.max(processedData, d => d.SO_AB)])
-    // .range([scatterHeight, 0]);
+            const rate =
+                totalStudents > 0 ? depressedStudents / totalStudents : 0;
 
-    // const yAxisCall = d3.axisLeft(y1)
-    //                     .ticks(13);
-    // g1.append("g").call(yAxisCall);
+            processedHeatmapData.push({
+                year,
+                cgpa,
+                totalStudents,
+                depressedStudents,
+                rate,
+            });
+        }
+    }
 
-    // // circles
-    // const circles = g1.selectAll("circle").data(processedData);
+    // Make the chart
+    const heatmapChart = svg
+        .append("g")
+        .attr("width", heatmapChartWidth)
+        .attr("height", heatmapChartHeight)
+        .attr(
+            "transform",
+            `translate(
+                ${heatmapChartLeft + heatmapChartMargin.left}, 
+                ${heatmapChartTop + heatmapChartMargin.top})`
+        );
 
-    // circles.enter().append("circle")
-    //      .attr("cx", d => x1(d.H_AB))
-    //      .attr("cy", d => y1(d.SO_AB))
-    //      .attr("r", 5)
-    //      .attr("fill", "#69b3a2");
+    // X axis
+    const heatmapX = d3
+        .scaleBand()
+        .range([0, heatmapChartWidth])
+        .domain(years)
+        .padding(0.1);
+    heatmapChart
+        .append("g")
+        .attr("transform", `translate(0, ${heatmapChartHeight})`)
+        .call(d3.axisBottom(heatmapX))
+        .selectAll("text")
+        .style("font-size", 14);
 
-    // const g2 = svg.append("g")
-    //             .attr("width", distrWidth + distrMargin.left + distrMargin.right)
-    //             .attr("height", distrHeight + distrMargin.top + distrMargin.bottom)
-    //             .attr("transform", `translate(${distrLeft}, ${distrTop})`);
+    // Y axis
+    const heatmapY = d3
+        .scaleBand()
+        .range([heatmapChartHeight, 0])
+        .domain(cgpas)
+        .padding(0.1);
 
-    // //plot 2: Bar Chart for Team Player Count
+    heatmapChart
+        .append("g")
+        .call(d3.axisLeft(heatmapY))
+        .selectAll("text")
+        .attr("transform", "rotate(-45)")
+        .attr("x", -9)
+        .attr("y", 0)
+        .attr("dy", ".35em")
+        .attr("text-anchor", "end")
+        .style("font-size", 14);
 
-    // const teamCounts = processedData.reduce((s, { teamID }) => (s[teamID] = (s[teamID] || 0) + 1, s), {});
-    // const teamData = Object.keys(teamCounts).map((key) => ({ teamID: key, count: teamCounts[key] }));
-    // console.log("teamData", teamData);
+    // Colors, again green good, red bad
+    const heatmapColor = d3
+        .scaleLinear()
+        .range(["green", "red"])
+        .domain([0, 1]);
 
-    // const g3 = svg.append("g")
-    //             .attr("width", teamWidth + teamMargin.left + teamMargin.right)
-    //             .attr("height", teamHeight + teamMargin.top + teamMargin.bottom)
-    //             .attr("transform", `translate(${teamMargin.left}, ${teamTop})`);
+    // Make the actual heatmap based on the example
+    heatmapChart
+        .selectAll()
+        .data(processedHeatmapData)
+        .enter()
+        .append("rect")
+        .attr("x", (d) => heatmapX(d.year))
+        .attr("y", (d) => heatmapY(d.cgpa))
+        .attr("width", heatmapX.bandwidth())
+        .attr("height", heatmapY.bandwidth())
+        .style("fill", (d) => heatmapColor(d.rate))
+        .style("stroke", "white")
+        .style("stroke-width", 1);
 
-    // // X label
-    // g3.append("text")
-    // .attr("x", teamWidth / 2)
-    // .attr("y", teamHeight + 50)
-    // .attr("font-size", "20px")
-    // .attr("text-anchor", "middle")
-    // .text("Team");
+    // Title
+    heatmapChart
+        .append("text")
+        .attr("x", heatmapChartWidth / 2)
+        .attr("y", -70)
+        .attr("text-anchor", "middle")
+        .style("font-size", "18px")
+        .style("font-weight", "bold")
+        .text("Student Depression Rate by Year and CGPA");
 
-    // // Y label
-    // g3.append("text")
-    // .attr("x", -(teamHeight / 2))
-    // .attr("y", -40)
-    // .attr("font-size", "20px")
-    // .attr("text-anchor", "middle")
-    // .attr("transform", "rotate(-90)")
-    // .text("Number of players");
+    // X label
+    heatmapChart
+        .append("text")
+        .attr("x", heatmapChartWidth / 2)
+        .attr("y", heatmapChartHeight + 40)
+        .attr("text-anchor", "middle")
+        .style("font-size", "14px")
+        .text("Year of Study");
 
-    // // X ticks
-    // const x2 = d3.scaleBand()
-    // .domain(teamData.map(d => d.teamID))
-    // .range([0, teamWidth])
-    // .paddingInner(0.3)
-    // .paddingOuter(0.2);
+    // Y label
+    heatmapChart
+        .append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -heatmapChartHeight / 2)
+        .attr("y", -80)
+        .attr("text-anchor", "middle")
+        .style("font-size", "14px")
+        .text("CGPA Range");
 
-    // const xAxisCall2 = d3.axisBottom(x2);
-    // g3.append("g")
-    // .attr("transform", `translate(0, ${teamHeight})`)
-    // .call(xAxisCall2)
-    // .selectAll("text")
-    //     .attr("y", "10")
-    //     .attr("x", "-5")
-    //     .attr("text-anchor", "end")
-    //     .attr("transform", "rotate(-40)");
+    // Legend
 
-    // // Y ticks
-    // const y2 = d3.scaleLinear()
-    // .domain([0, d3.max(teamData, d => d.count)])
-    // .range([teamHeight, 0])
-    // .nice();
+    // The legend part is basically the same as visualization 1 because it uses the same scale
 
-    // const yAxisCall2 = d3.axisLeft(y2)
-    //                     .ticks(6);
-    // g3.append("g").call(yAxisCall2);
+    const heatmapLegendWidth = 100;
+    const heatmapLegendHeight = 20;
 
-    // // bars
-    // const bars = g3.selectAll("rect").data(teamData);
+    // create the legend element in top right
+    const heatmapLegend = heatmapChart
+        .append("g")
+        .attr(
+            "transform",
+            `translate(${heatmapChartWidth - heatmapLegendWidth - 10}, -45)`
+        );
 
-    // bars.enter().append("rect")
-    // .attr("y", d => y2(d.count))
-    // .attr("x", d => x2(d.teamID))
-    // .attr("width", x2.bandwidth())
-    // .attr("height", d => teamHeight - y2(d.count))
-    // .attr("fill", "steelblue");
+    // make it so the user can understand what the colors mean
+    const heatmapGradient = heatmapLegend
+        .append("linearGradient")
+        .attr("id", "heatmapLegendGradient")
+        .attr("x1", "0%")
+        .attr("x2", "100%");
 
-    // }).catch(function(error){
-    // console.log(error);
+    // make the gradient itself
+    heatmapGradient
+        .append("stop")
+        .attr("offset", "0%")
+        .attr("stop-color", "green");
+    heatmapGradient
+        .append("stop")
+        .attr("offset", "100%")
+        .attr("stop-color", "red");
+
+    // make the legend box that contains the gradient
+    heatmapLegend
+        .append("rect")
+        .attr("width", heatmapLegendWidth)
+        .attr("height", heatmapLegendHeight)
+        .style("fill", "url(#heatmapLegendGradient)");
+
+    // put 0% on one side and 100% on the other
+    heatmapLegend
+        .append("text")
+        .attr("x", 0)
+        .attr("y", heatmapLegendHeight + 20)
+        .attr("text-anchor", "start")
+        .style("font-size", "14px")
+        .text("0%");
+
+    heatmapLegend
+        .append("text")
+        .attr("x", heatmapLegendWidth)
+        .attr("y", heatmapLegendHeight + 20)
+        .attr("text-anchor", "end")
+        .style("font-size", "14px")
+        .text("100%");
 });
