@@ -90,7 +90,7 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
     console.log("rawData", rawData);
 
     // Clean course data to merge catagories, eg. laws and law to just law
-
+    // Also create some helpful attributes for the plots
     const cleanedData = { ...rawData };
 
     for (let d of rawData) {
@@ -98,8 +98,19 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
         d.courseCatagory =
             d.cleanedCourse in courseToCategoryMap
                 ? courseToCategoryMap[d.cleanedCourse]
-                : "Other/Uncategorized";
+                : "Other";
+
+        d.hasDepression = d["Do you have Depression?"] === "Yes";
+        d.gender = d["Choose your gender"];
+        // Get just the number for year since the og data has manually typed out Year 1 or year 3
+        d.year = parseInt(d["Your current year of Study"].match(/\d+/)[0]);
+        d.age = d["Age"];
+
+        d.hasAnxiety = d["Do you have Anxiety?"] === "Yes";
+        d.hasPanicAttack = d["Do you have Panic attack?"] === "Yes";
     }
+
+    console.log("cleaned", cleanedData);
 
     // Plot 1: Bar Chart for Depression Rate by Course
 
@@ -109,8 +120,8 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
     // Since I already processed the data with these gender categories I will leave them
     const filteredDepressionData = rawData.map((d) => ({
         course: d.courseCatagory,
-        hasDepression: d["Do you have Depression?"] === "Yes",
-        gender: d["Choose your gender"],
+        hasDepression: d.hasDepression,
+        gender: d.gender,
     }));
 
     const processedDepressionData = {};
@@ -299,18 +310,190 @@ d3.csv("/data/Student Mental health.csv").then((rawData) => {
     depressionLegend
         .append("text")
         .attr("x", 0)
-        .attr("y", depressionLegendHeight + 15)
+        .attr("y", depressionLegendHeight + 20)
         .attr("text-anchor", "start")
-        .style("font-size", "12px")
+        .style("font-size", "14px")
         .text("0%");
 
     depressionLegend
         .append("text")
         .attr("x", depressionLegendWidth)
-        .attr("y", depressionLegendHeight + 15)
+        .attr("y", depressionLegendHeight + 20)
         .attr("text-anchor", "end")
-        .style("font-size", "12px")
+        .style("font-size", "14px")
         .text("100%");
+
+    // Plot 2: Chord diagram
+
+    // I used https://d3-graph-gallery.com/graph/chord_colors.html as a template/guide
+
+    // Represents connections between male, female, depression, anxiety, panic attack
+
+    let chordChartLeft = 0,
+        chordChartTop = height / 2;
+
+    let chordChartMargin = { top: 50, right: 50, bottom: 50, left: 50 },
+        chordChartWidth = width / 2,
+        chordChartHeight = height / 2;
+
+    const chordChart = svg
+        .append("g")
+        .attr("width", chordChartWidth)
+        .attr("height", chordChartHeight)
+        .attr("transform", `translate(${chordChartLeft}, ${chordChartTop})`);
+
+    // Create matrix data for chord diagram
+    // male, female, depression, anxiety, panic attack
+    // just get the amount of students in each pair of categories
+    // self to self is 0 and cannot be both male and female
+    const matrix = [
+        // male
+        [
+            0,
+            0, // cannot be both male and female
+            rawData.filter((d) => d.gender === "Male" && d.hasDepression)
+                .length,
+            rawData.filter((d) => d.gender === "Male" && d.hasAnxiety).length,
+            rawData.filter((d) => d.gender === "Male" && d.hasPanicAttack)
+                .length,
+        ],
+
+        // female
+        [
+            0,
+            0,
+            rawData.filter((d) => d.gender === "Female" && d.hasDepression)
+                .length,
+            rawData.filter((d) => d.gender === "Female" && d.hasAnxiety).length,
+            rawData.filter((d) => d.gender === "Female" && d.hasPanicAttack)
+                .length,
+        ],
+
+        // depression
+        [
+            rawData.filter((d) => d.gender === "Male" && d.hasDepression)
+                .length,
+            rawData.filter((d) => d.gender === "Female" && d.hasDepression)
+                .length,
+            0,
+            rawData.filter((d) => d.hasAnxiety && d.hasDepression).length,
+            rawData.filter((d) => d.hasDepression && d.hasPanicAttack).length,
+        ],
+
+        // anxiety
+        [
+            rawData.filter((d) => d.gender === "Male" && d.hasAnxiety).length,
+            rawData.filter((d) => d.gender === "Female" && d.hasAnxiety).length,
+            rawData.filter((d) => d.hasAnxiety && d.hasDepression).length,
+            0,
+            rawData.filter((d) => d.hasAnxiety && d.hasPanicAttack).length,
+        ],
+
+        // panic attack
+        [
+            rawData.filter((d) => d.gender === "Male" && d.hasPanicAttack)
+                .length,
+            rawData.filter((d) => d.gender === "Female" && d.hasPanicAttack)
+                .length,
+            rawData.filter((d) => d.hasDepression && d.hasPanicAttack).length,
+            rawData.filter((d) => d.hasAnxiety && d.hasPanicAttack).length,
+            0,
+        ],
+    ];
+
+    console.log("matrix:", matrix);
+
+    const chordInfo = d3.chord().padAngle(0.05).sortSubgroups(d3.descending)(
+        matrix
+    );
+
+    const chordColors = d3.schemeTableau10;
+
+    // Calculate responsive radius based on chart size
+    const outerRadius = Math.min(chordChartWidth, chordChartHeight) * 0.35;
+    const innerRadius = outerRadius - 10;
+
+    // i pretty much just used the example from the link above
+    // but also positioned it on the page
+    // this part makes the rings on the outside
+    chordChart
+        .datum(chordInfo)
+        .append("g")
+        .selectAll("g")
+        .data((d) => d.groups)
+        .enter()
+        .append("g")
+        .append("path")
+        .style("fill", function (d, i) {
+            return chordColors[i];
+        })
+        .style("stroke", "black")
+        .attr("d", d3.arc().innerRadius(innerRadius).outerRadius(outerRadius))
+        .attr(
+            "transform",
+            `translate(${chordChartWidth / 2}, ${chordChartHeight / 2})`
+        );
+
+    // links
+    chordChart
+        .datum(chordInfo)
+        .append("g")
+        .selectAll("path")
+        .data((d) => d)
+        .enter()
+        .append("path")
+        .attr("d", d3.ribbon().radius(innerRadius))
+        .style("fill", function (d) {
+            return chordColors[d.source.index];
+        })
+        .style("stroke", "black")
+        .attr(
+            "transform",
+            `translate(${chordChartWidth / 2}, ${chordChartHeight / 2})`
+        );
+
+    // Title
+    chordChart
+        .append("text")
+        .attr("x", chordChartWidth / 2)
+        .attr("y", -20)
+        .attr("text-anchor", "middle")
+        .style("font-size", "18px")
+        .style("font-weight", "bold")
+        .text("Mental Health & Gender");
+
+    // Legend
+    const legendWidth = 150;
+    const chordLegend = chordChart
+        .append("g")
+        .attr("transform", `translate(${chordChartWidth - legendWidth}, 0)`);
+
+    const chordLegendNames = [
+        "Male",
+        "Female",
+        "Has Depression",
+        "Has Anxiety",
+        "Has Panic Attack",
+    ];
+
+    const chordLegendEntries = chordLegend
+        .selectAll("g")
+        .data(chordLegendNames)
+        .join("g")
+        .attr("transform", (d, i) => `translate(0, ${i * 22})`);
+
+    chordLegendEntries
+        .append("rect")
+        .attr("width", 20)
+        .attr("height", 20)
+        .style("fill", (d, i) => chordColors[i]);
+
+    chordLegendEntries
+        .append("text")
+        .attr("x", 30)
+        .attr("y", 15)
+        .text((d) => d)
+        .style("font-size", 16);
 
     // rawData.forEach(function(d){
     //     d.AB = Number(d.AB);
