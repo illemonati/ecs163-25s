@@ -7,11 +7,9 @@ const height = window.innerHeight;
 let depressionChartLeft = 0,
     depressionChartTop = 20;
 
-let depressionChartMargin = { top: 40, right: 30, bottom: 60, left: 80 },
+let depressionChartMargin = { top: 40, right: 50, bottom: 100, left: 80 },
     depressionChartWidth =
-        Math.floor(width / 3) -
-        depressionChartMargin.left -
-        depressionChartMargin.right,
+        width - depressionChartMargin.left - depressionChartMargin.right,
     depressionChartHeight =
         350 - depressionChartMargin.top - depressionChartMargin.bottom;
 
@@ -85,8 +83,10 @@ const courseToCategoryMap = {
     kop: "Other", // Was ambiguous
 };
 
+console.log(courseToCategoryMap);
+
 // plots
-d3.csv("data/Student Mental Health.csv").then((rawData) => {
+d3.csv("/data/Student Mental health.csv").then((rawData) => {
     console.log("rawData", rawData);
 
     // Clean course data to merge catagories, eg. laws and law to just law
@@ -101,11 +101,12 @@ d3.csv("data/Student Mental Health.csv").then((rawData) => {
                 : "Other/Uncategorized";
     }
 
-    // Plot 1: (Double?) Bar Chart for Depression Rate by Course and Gender
-    // I think it's called Double Bar chart but basically its bar chart
-    // But each catagory has 2 subcatagories
-    // So 2 bars
+    // Plot 1: Bar Chart for Depression Rate by Course
 
+    // I was originally going to do a double bar chart
+    // But I realized it's not a good fit for the data
+    // As many courses don't have both male and female students
+    // Since I already processed the data with these gender categories I will leave them
     const filteredDepressionData = rawData.map((d) => ({
         course: d.courseCatagory,
         hasDepression: d["Do you have Depression?"] === "Yes",
@@ -127,23 +128,189 @@ d3.csv("data/Student Mental Health.csv").then((rawData) => {
                     total: 0,
                     rate: undefined,
                 },
+                totalStudents: 0,
+                totalDepressed: 0,
+                totalRate: undefined,
             };
         }
 
-        const catagory =
-            processedDepressionData[d.course][d.gender.toLowerCase()];
+        const course = processedDepressionData[d.course];
+
+        const catagory = course[d.gender.toLowerCase()];
 
         if (d.hasDepression) {
             catagory.depressed += 1;
+            course.totalDepressed += 1;
         }
         catagory.total += 1;
         catagory.rate = catagory.depressed / catagory.total;
+
+        course.totalStudents += 1;
+        course.totalRate = course.totalDepressed / course.totalStudents;
     }
 
-    console.log(processedDepressionData);
+    // Make array since d3 needs that, also sort by the rate
+    const processedDepressionDataArray = Object.keys(processedDepressionData)
+        .map((key) => ({
+            course: key,
+            ...processedDepressionData[key],
+        }))
+        .sort((a, b) => b.totalRate - a.totalRate);
+
+    console.log(processedDepressionDataArray);
 
     // Make the plot
     const svg = d3.select("svg");
+
+    const depressionBarChart = svg
+        .append("g")
+        .attr(
+            "width",
+            depressionChartWidth +
+                depressionChartMargin.left +
+                depressionChartMargin.right
+        )
+        .attr(
+            "height",
+            depressionChartHeight +
+                depressionChartMargin.top +
+                depressionChartMargin.bottom
+        )
+        .attr(
+            "transform",
+            `translate(${depressionChartMargin.left}, ${depressionChartMargin.top})`
+        );
+
+    // X label
+    depressionBarChart
+        .append("text")
+        .attr("x", depressionChartWidth / 2)
+        .attr("y", depressionChartHeight + 200)
+        .attr("font-size", "20px")
+        .attr("text-anchor", "middle")
+        .text("Course Category");
+
+    // Y label
+    depressionBarChart
+        .append("text")
+        .attr("x", -(depressionChartHeight / 2))
+        .attr("y", -40)
+        .attr("font-size", "20px")
+        .attr("text-anchor", "middle")
+        .attr("transform", "rotate(-90)")
+        .text("Depression Rate");
+
+    // X ticks
+    const depressionX = d3
+        .scaleBand()
+        .domain(processedDepressionDataArray.map((d) => d.course))
+        .range([0, depressionChartWidth])
+        .padding(0.1);
+
+    const depressionXAxisCall = d3.axisBottom(depressionX);
+    depressionBarChart
+        .append("g")
+        .attr("transform", `translate(0, ${depressionChartHeight})`)
+        .call(depressionXAxisCall)
+        .selectAll("text")
+        .attr("y", "10")
+        .attr("x", "-5")
+        .attr("text-anchor", "end")
+        .attr("transform", "rotate(-40)")
+        .style("font-size", "12px");
+
+    // Y ticks
+    const depressionY = d3
+        .scaleLinear()
+        .domain([0, 100])
+        .range([depressionChartHeight, 0]);
+
+    const yAxisCall = d3
+        .axisLeft(depressionY)
+        .ticks(10)
+        .tickFormat((d) => d + "%");
+    depressionBarChart
+        .append("g")
+        .call(yAxisCall)
+        .selectAll("text")
+        .text((d) => d + "%");
+
+    // Color based on red being bad and green being good
+    const depressionColor = d3
+        .scaleSequential()
+        .domain([0, 1])
+        .interpolator(d3.interpolateRgb("green", "red"));
+
+    // Make the bars
+    depressionBarChart
+        .selectAll("rect")
+        .data(processedDepressionDataArray)
+        .join("rect")
+        .attr("x", (d) => depressionX(d.course))
+        .attr("y", (d) => depressionY(d.totalRate * 100))
+        .attr("width", depressionX.bandwidth())
+        .attr(
+            "height",
+            (d) => depressionChartHeight - depressionY(d.totalRate * 100)
+        )
+        .attr("fill", (d) => depressionColor(d.totalRate));
+
+    // Title
+    depressionBarChart
+        .append("text")
+        .attr("x", depressionChartWidth / 2)
+        .attr("y", -15)
+        .attr("text-anchor", "middle")
+        .style("font-size", "24px")
+        .style("font-weight", "bold")
+        .text("Depression Rate by Course");
+
+    // Make the legend
+    // I also used chatgpt to help me understand how to make a gradiant
+    const depressionLegendWidth = 100;
+    const depressionLegendHeight = 20;
+
+    const depressionLegend = depressionBarChart
+        .append("g")
+        .attr(
+            "transform",
+            `translate(${
+                depressionChartWidth - depressionLegendWidth - 10
+            },-20)`
+        );
+
+    // make it so the user can understand what the colors mean
+    const gradient = depressionLegend
+        .append("linearGradient")
+        .attr("id", "depressionLegendGradient")
+        .attr("x1", "0%")
+        .attr("x2", "100%");
+
+    gradient.append("stop").attr("offset", "0%").attr("stop-color", "green");
+    gradient.append("stop").attr("offset", "100%").attr("stop-color", "red");
+
+    depressionLegend
+        .append("rect")
+        .attr("width", depressionLegendWidth)
+        .attr("height", depressionLegendHeight)
+        .style("fill", "url(#depressionLegendGradient)");
+
+    // put 0% on one side and 100% on the other
+    depressionLegend
+        .append("text")
+        .attr("x", 0)
+        .attr("y", depressionLegendHeight + 15)
+        .attr("text-anchor", "start")
+        .style("font-size", "12px")
+        .text("0%");
+
+    depressionLegend
+        .append("text")
+        .attr("x", depressionLegendWidth)
+        .attr("y", depressionLegendHeight + 15)
+        .attr("text-anchor", "end")
+        .style("font-size", "12px")
+        .text("100%");
 
     // rawData.forEach(function(d){
     //     d.AB = Number(d.AB);
